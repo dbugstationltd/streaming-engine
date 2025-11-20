@@ -348,28 +348,6 @@
         function toggleStreaming() {
             if (isStreaming) {
                 stopStreaming();
-            } else {
-                startStreaming();
-            }
-        }
-
-        function startStreaming() {
-            const serverIp = document.getElementById('serverIp').value || 'localhost';
-            const streamKey = document.getElementById('streamKey').value || 'stream';
-
-            // Update display URLs
-            document.getElementById('rtmpUrl').innerText = `rtmp://${serverIp}/live/${streamKey}`;
-            document.getElementById('hlsUrl').innerText = `http://${serverIp}:8080/live/${streamKey}/index.m3u8`;
-            document.getElementById('flvUrl').innerText = `http://${serverIp}:8000/live/${streamKey}.flv`;
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${serverIp}:8001?key=${streamKey}`);
-
-            ws.onopen = () => {
-                console.log('Connected to server');
-                const stream = canvas.captureStream(30); // 30 FPS
-
-                // Add audio: Try to find first available audio track
                 let audioTrack = null;
                 for (const source of sources) {
                     // Check if source has srcObject (camera/screen) with audio tracks
