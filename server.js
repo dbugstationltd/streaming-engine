@@ -41,15 +41,15 @@ wss.on('connection', (ws) => {
         '-ar', '44100',              // Audio sample rate
         '-b:a', '128k',              // Audio bitrate
         '-f', 'flv',                 // Output format
-        'rtmp://localhost/live/stream' // Target RTMP URL
+        'rtmp://127.0.0.1/live/stream' // Target RTMP URL
     ]);
 
     ffmpegProcess.stderr.on('data', (data) => {
         console.log(`FFmpeg: ${data}`);
     });
 
-    ffmpegProcess.on('close', (code) => {
-        console.log(`FFmpeg process exited with code ${code}`);
+    ffmpegProcess.on('close', (code, signal) => {
+        console.log(`FFmpeg process exited with code ${code} and signal ${signal}`);
     });
 
     // Handle stdin errors to prevent server crash
