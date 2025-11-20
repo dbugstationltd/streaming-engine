@@ -4,25 +4,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Broadcaster (OBS-like)</title>
+    <title>Web Broadcaster</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #1a1a1a;
-            color: #fff;
+            color: white;
+            margin: 0;
+            padding: 20px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin: 0;
-            padding: 20px;
             height: 100vh;
         }
 
-        h1 {
-            margin-bottom: 20px;
-        }
-
-        .main-container {
+        .container {
             display: flex;
             gap: 20px;
             width: 100%;
@@ -34,12 +30,12 @@
             flex: 3;
             background: #000;
             border-radius: 8px;
+            overflow: hidden;
+            position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
-            position: relative;
-            overflow: hidden;
-            border: 2px solid #333;
+            border: 1px solid #333;
         }
 
         canvas {
@@ -58,81 +54,104 @@
             gap: 15px;
         }
 
+        h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+
         button {
-            padding: 12px;
+            padding: 10px 15px;
             border: none;
             border-radius: 4px;
-            font-weight: bold;
             cursor: pointer;
+            font-weight: bold;
             transition: background 0.2s;
         }
 
         .btn-primary {
-            background: #007bff;
+            background-color: #007bff;
             color: white;
         }
 
         .btn-primary:hover {
-            background: #0056b3;
-        }
-
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #a71d2a;
+            background-color: #0056b3;
         }
 
         .btn-success {
-            background: #28a745;
+            background-color: #28a745;
             color: white;
         }
 
         .btn-success:hover {
-            background: #1e7e34;
+            background-color: #218838;
+        }
+
+        .btn-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #c82333;
         }
 
         .sources-list {
-            margin-top: 20px;
-            border-top: 1px solid #444;
-            padding-top: 10px;
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 10px;
+            background: #222;
         }
 
         .source-item {
-            background: #333;
-            padding: 10px;
-            margin-bottom: 5px;
-            border-radius: 4px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 8px;
+            background: #333;
+            margin-bottom: 5px;
+            border-radius: 4px;
         }
 
         .status {
-            margin-top: auto;
             padding: 10px;
-            background: #333;
-            border-radius: 4px;
             text-align: center;
-            font-size: 0.9em;
-        }
-
-        .status.live {
-            color: #28a745;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
         }
 
         .status.offline {
-            color: #6c757d;
+            background-color: #444;
+            color: #aaa;
+        }
+
+        .status.live {
+            background-color: #dc3545;
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.8;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
     </style>
 </head>
 
 <body>
-    <h1>Web Broadcaster</h1>
-
-    <div class="main-container">
+    <div class="container">
         <div class="preview-area">
             <canvas id="broadcastCanvas" width="1280" height="720"></canvas>
         </div>
@@ -185,7 +204,7 @@
                 </div>
                 <div style="margin-top: 5px;">
                     <span style="color: #aaa;">HLS (m3u8):</span> <span id="hlsUrl"
-                        style="color: #ffc107;">http://localhost:8000/live/stream/index.m3u8</span>
+                        style="color: #ffc107;">http://localhost:8080/live/stream/index.m3u8</span>
                 </div>
                 <div style="margin-top: 5px;">
                     <span style="color: #aaa;">FLV:</span> <span id="flvUrl"
@@ -334,65 +353,93 @@
             }
         }
 
-        ws.onopen = () => {
-            console.log('Connected to server');
-            const stream = canvas.captureStream(30); // 30 FPS
+        function startStreaming() {
+            const serverIp = document.getElementById('serverIp').value || 'localhost';
+            const streamKey = document.getElementById('streamKey').value || 'stream';
 
-            // Add audio: Try to find first available audio track
-            let audioTrack = null;
-            for (const source of sources) {
-                // Check if source has srcObject (camera/screen) with audio tracks
-                if (source.element.srcObject && source.element.srcObject.getAudioTracks) {
-                    const tracks = source.element.srcObject.getAudioTracks();
-                    if (tracks.length > 0) {
-                        audioTrack = tracks[0];
-                        break;
+            // Update display URLs
+            document.getElementById('rtmpUrl').innerText = `rtmp://${serverIp}/live/${streamKey}`;
+            document.getElementById('hlsUrl').innerText = `http://${serverIp}:8080/live/${streamKey}/index.m3u8`;
+            document.getElementById('flvUrl').innerText = `http://${serverIp}:8000/live/${streamKey}.flv`;
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${serverIp}:8001?key=${streamKey}`);
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                const stream = canvas.captureStream(30); // 30 FPS
+
+                // Add audio: Try to find first available audio track
+                let audioTrack = null;
+                for (const source of sources) {
+                    // Check if source has srcObject (camera/screen) with audio tracks
+                    if (source.element.srcObject && source.element.srcObject.getAudioTracks) {
+                        const tracks = source.element.srcObject.getAudioTracks();
+                        if (tracks.length > 0) {
+                            audioTrack = tracks[0];
+                            break;
+                        }
                     }
                 }
-            }
 
-            // If no audio track, create dummy silence
-            if (!audioTrack) {
-                console.log('No audio source found, creating silent track');
-                const ctx = new AudioContext();
-                const oscillator = ctx.createOscillator();
-                const dst = ctx.createMediaStreamDestination();
-                oscillator.connect(dst);
-                oscillator.start();
-                audioTrack = dst.stream.getAudioTracks()[0];
-            }
-
-            if (audioTrack) {
-                stream.addTrack(audioTrack);
-            }
-
-            mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'video/webm;codecs=h264',
-                videoBitsPerSecond: 2500000 // 2.5 Mbps (Reduced for stability)
-            });
-
-            mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-                    ws.send(event.data);
+                // If no audio track, create dummy silence
+                if (!audioTrack) {
+                    console.log('No audio source found, creating silent track');
+                    const ctx = new AudioContext();
+                    const oscillator = ctx.createOscillator();
+                    const dst = ctx.createMediaStreamDestination();
+                    oscillator.connect(dst);
+                    oscillator.start();
+                    audioTrack = dst.stream.getAudioTracks()[0];
                 }
+
+                if (audioTrack) {
+                    stream.addTrack(audioTrack);
+                }
+
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=h264',
+                    videoBitsPerSecond: 2500000 // 2.5 Mbps (Reduced for stability)
+                });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                        ws.send(event.data);
+                    }
+                };
+
+                mediaRecorder.start(250); // Send chunk every 250ms (Reduced for smoother playback)
+
+                isStreaming = true;
+                document.getElementById('streamBtn').innerText = 'Stop Streaming';
+                document.getElementById('streamBtn').className = 'btn-danger';
+                document.getElementById('status').innerText = 'Live';
+                document.getElementById('status').className = 'status live';
             };
 
-            mediaRecorder.start(250); // Send chunk every 250ms (Reduced for smoother playback)
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+                alert('Could not connect to server. Is it running?');
+            };
 
-            isStreaming = true;
-            document.getElementById('streamBtn').innerText = 'Stop Streaming';
-            document.getElementById('streamBtn').className = 'btn-danger';
-            document.getElementById('status').innerText = 'Live';
-            document.getElementById('status').className = 'status live';
-        };
+            ws.onclose = () => {
+                stopStreaming();
+            };
+        }
 
-        ws.close();
+        function stopStreaming() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
             }
-        isStreaming = false;
-        document.getElementById('streamBtn').innerText = 'Start Streaming';
-        document.getElementById('streamBtn').className = 'btn-success';
-        document.getElementById('status').innerText = 'Offline';
-        document.getElementById('status').className = 'status offline';
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            isStreaming = false;
+            document.getElementById('streamBtn').innerText = 'Start Streaming';
+            document.getElementById('streamBtn').className = 'btn-success';
+            document.getElementById('status').innerText = 'Offline';
+            document.getElementById('status').className = 'status offline';
         }
     </script>
 </body>
