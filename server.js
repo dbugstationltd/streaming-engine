@@ -126,6 +126,14 @@ app.use('/live', (req, res, next) => {
     next();
 }, express.static(path.join(config.http.mediaroot, 'live')));
 
+// Serve Static Files (Broadcaster UI)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Fallback to broadcaster.html for root if needed (optional, but good for UX)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'broadcaster.html'));
+});
+
 const HLS_PORT = 8080;
 app.listen(HLS_PORT, () => {
     console.log(`HLS Server running on port ${HLS_PORT}`);
