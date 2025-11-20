@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Broadcaster (OBS-like)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .main-container {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+            max-width: 1200px;
+            flex: 1;
+        }
+
+        .preview-area {
+            flex: 3;
+            background: #000;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid #333;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            background: #000;
+        }
+
+        .controls-area {
+            flex: 1;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #a71d2a;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+
+        .sources-list {
+            margin-top: 20px;
+            border-top: 1px solid #444;
+            padding-top: 10px;
+        }
+
+        .source-item {
+            background: #333;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .status {
+            margin-top: auto;
+            padding: 10px;
+            background: #333;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .status.live {
+            color: #28a745;
+        }
+
+        .status.offline {
+            color: #6c757d;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Web Broadcaster</h1>
+    <!-- Sources will appear here -->
+    </div>
+
+    <div style="margin-top: auto;">
+        <button id="streamBtn" class="btn-success" style="width: 100%;" onclick="toggleStreaming()">Start
+            Streaming</button>
+    </div>
+
+    <div id="status" class="status offline">Offline</div>
+
+    <div class="url-display"
+        style="margin-top: 20px; background: #333; padding: 10px; border-radius: 4px; font-size: 0.8em; word-break: break-all;">
+        <strong>Stream URLs (Active when Live):</strong><br>
+        <div style="margin-top: 5px;">
+            <span style="color: #aaa;">RTMP:</span> <span id="rtmpUrl"
+                style="color: #4db8ff;">rtmp://localhost/live/stream</span>
+        </div>
+        <div style="margin-top: 5px;">
+            <span style="color: #aaa;">HLS (m3u8):</span> <span id="hlsUrl"
+                style="color: #ffc107;">http://localhost:8000/live/stream/index.m3u8</span>
+        </div>
+        <div style="margin-top: 5px;">
+            <span style="color: #aaa;">FLV:</span> <span id="flvUrl"
+                style="color: #28a745;">http://localhost:8000/live/stream.flv</span>
+        </div>
+    </div>
+    </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('broadcastCanvas');
+        const ctx = canvas.getContext('2d');
+        const sources = []; // Array of { type: 'video', element: videoElement, x, y, width, height }
+        let isStreaming = false;
+        let mediaRecorder;
+        let ws;
+
+        // Draw Loop
+        function draw() {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw sources
+            sources.forEach(source => {
+                if (source.element.readyState === 4) { // HAVE_ENOUGH_DATA
+                    ctx.drawImage(source.element, source.x, source.y, source.width, source.height);
+                }
+            });
+
+            requestAnimationFrame(draw);
+        }
+        draw();
+
+        async function addCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                addVideoSource(stream, 'Camera');
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                alert('Could not access camera');
+            }
+        }
+
+        async function addScreen() {
+            try {
+                const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+                addVideoSource(stream, 'Screen');
+            } catch (err) {
+                console.error('Error accessing screen:', err);
+            }
+        }
+
+        function addVideoSource(stream, name) {
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.muted = true; // Mute local playback to avoid feedback
+            video.play();
+
+            const isScreen = name === 'Screen';
+            const width = isScreen ? canvas.width : 320;
+            const height = isScreen ? canvas.height : 180;
+            const x = isScreen ? 0 : 20;
+            const y = isScreen ? 0 : canvas.height - height - 20;
+
+            const source = {
+                id: Date.now(),
+                type: 'video',
+                name: name,
+                element: video,
+                x: x,
+                y: y,
+                width: width,
+                height: height
+            };
+            // Put screen at bottom (background), camera on top
+            if (isScreen) {
+                sources.unshift(source);
+            } else {
+                sources.push(source);
+            }
+            updateSourcesList();
+        }
+
+        function removeSource(id) {
+            const index = sources.findIndex(s => s.id === id);
+            if (index > -1) {
+                sources[index].element.srcObject.getTracks().forEach(track => track.stop());
+                sources.splice(index, 1);
+                updateSourcesList();
+            }
+        }
+
+        function updateSourcesList() {
+            const list = document.getElementById('sourcesList');
+            list.innerHTML = '';
+            sources.forEach(s => {
+                const div = document.createElement('div');
+                div.className = 'source-item';
+                div.innerHTML = `
+                    <span>${s.name}</span>
+                    <button class="btn-danger" style="padding: 5px 10px;" onclick="removeSource(${s.id})">X</button>
+                `;
+                list.appendChild(div);
+            });
+        }
+
+        function toggleStreaming() {
+            if (isStreaming) {
+                stopStreaming();
+                for (const source of sources) {
+                    const tracks = source.element.srcObject.getAudioTracks();
+                    if (tracks.length > 0) {
+                        audioTrack = tracks[0];
+                        break;
+                    }
+                }
+
+                // If no audio track, create dummy silence
+                if (!audioTrack) {
+                    console.log('No audio source found, creating silent track');
+                    const ctx = new AudioContext();
+                    const oscillator = ctx.createOscillator();
+                    const dst = ctx.createMediaStreamDestination();
+                    oscillator.connect(dst);
+                    oscillator.start();
+                    audioTrack = dst.stream.getAudioTracks()[0];
+                }
+
+                if (audioTrack) {
+                    stream.addTrack(audioTrack);
+                }
+
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'video/webm;codecs=h264',
+                    videoBitsPerSecond: 3000000 // 3 Mbps
+                });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                        ws.send(event.data);
+                    }
+                };
+
+                mediaRecorder.start(1000); // Send chunk every 1s
+
+                isStreaming = true;
+                document.getElementById('streamBtn').innerText = 'Stop Streaming';
+                document.getElementById('streamBtn').className = 'btn-danger';
+                document.getElementById('status').innerText = 'Live';
+                document.getElementById('status').className = 'status live';
+            };
+
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+                alert('Could not connect to server. Is it running?');
+            };
+
+            ws.onclose = () => {
+                stopStreaming();
+            }
+        }
+
+        function stopStreaming() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            if (ws) {
+                ws.close();
+            }
+            isStreaming = false;
+            document.getElementById('streamBtn').innerText = 'Start Streaming';
+            document.getElementById('streamBtn').className = 'btn-success';
+            document.getElementById('status').innerText = 'Offline';
+            document.getElementById('status').className = 'status offline';
+        }
+    </script>
+</body>
+
+</html>

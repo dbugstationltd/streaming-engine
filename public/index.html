@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Streaming Engine Player</title>
+    <script src="https://cdn.bootcss.com/flv.js/1.5.0/flv.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .video-container {
+            background: #000;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        video {
+            width: 800px;
+            max-width: 100%;
+            height: auto;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            max-width: 800px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        code {
+            background: #eee;
+            padding: 2px 5px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Live Stream Player</h1>
+    <div class="video-container">
+        <video id="videoElement" controls autoplay></video>
+    </div>
+
+    <div class="instructions">
+        <h3>How to Stream:</h3>
+        <p>1. Open OBS Studio</p>
+        <p>2. Go to Settings > Stream</p>
+        <p>3. Service: Custom</p>
+        <p>4. Server: <code>rtmp://localhost/live</code></p>
+        <p>5. Stream Key: <code>stream</code></p>
+        <p>6. Start Streaming</p>
+    </div>
+
+    <script>
+        if (flvjs.isSupported()) {
+            var videoElement = document.getElementById('videoElement');
+            var flvPlayer = flvjs.createPlayer({
+                type: 'flv',
+                isLive: true,
+                url: 'http://localhost:8000/live/stream.flv'
+            });
+            flvPlayer.attachMediaElement(videoElement);
+            flvPlayer.load();
+
+            // Error handling
+            flvPlayer.on(flvjs.Events.ERROR, (errorType, errorDetail, errorInfo) => {
+                console.error('FLV Error:', errorType, errorDetail, errorInfo);
+                const errDiv = document.createElement('div');
+                errDiv.style.color = 'red';
+                errDiv.innerText = `Error: ${errorType} - ${errorDetail}`;
+                document.querySelector('.instructions').appendChild(errDiv);
+            });
+
+            var playPromise = flvPlayer.play();
+            if (playPromise !== undefined) {
+                playPromise.then(_ => {
+                    // Autoplay started!
+                }).catch(error => {
+                    // Autoplay was prevented.
+                    console.warn('Autoplay prevented', error);
+                    const btn = document.createElement('button');
+                    btn.innerText = 'Click to Play';
+                    btn.onclick = () => flvPlayer.play();
+                    document.querySelector('.video-container').appendChild(btn);
+                });
+            }
+        }
+    </script>
+</body>
+
+</html>
