@@ -4,6 +4,18 @@ const WebSocket = require('ws');
 const ffmpeg = require('ffmpeg-static');
 const child_process = require('child_process');
 
+const path = require('path');
+const fs = require('fs');
+
+// Ensure media directory exists
+const mediaRoot = path.join(__dirname, 'media');
+if (!fs.existsSync(mediaRoot)) {
+    fs.mkdirSync(mediaRoot, { recursive: true });
+}
+
+// Update config with absolute path
+config.http.mediaroot = mediaRoot;
+
 // 1. Start Node Media Server
 // Enable HLS Transcoding
 config.trans = {
