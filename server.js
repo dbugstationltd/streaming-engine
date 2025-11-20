@@ -109,15 +109,26 @@ wss.on('connection', (ws, req) => {
     ws.on('close', () => {
         console.log('Broadcaster disconnected');
         ffmpegProcess.stdin.end();
-        ffmpegProcess.kill();
+        ffmpegProcess.kill('SIGINT');
     });
 });
 
-console.log('WebSocket Relay Server listening on port 8001');
+// 3. Start Express Server for HLS (Bypassing NMS HTTP issues)
+const express = require('express');
+const cors = require('cors');
+const app = express();
 
-// NMS Events
-nms.on('preConnect', (id, args) => {
-    console.log('[NodeEvent onPreConnect]', `id=${id} args=${JSON.stringify(args)}`);
+app.use(cors());
+
+// Serve HLS files with correct headers
+app.use('/live', (req, res, next) => {
+    res.header('Cache-Control', 'no-cache');
+    next();
+}, express.static(path.join(config.http.mediaroot, 'live')));
+
+const HLS_PORT = 8080;
+app.listen(HLS_PORT, () => {
+    console.log(`HLS Server running on port ${HLS_PORT}`);
 });
 
 nms.on('postConnect', (id, args) => {
