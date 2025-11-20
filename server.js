@@ -41,12 +41,25 @@ nms.run();
 // 2. Start WebSocket Server for Broadcaster
 const wss = new WebSocket.Server({ port: 8001 });
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
     console.log('Broadcaster connected');
+
+    // Parse stream key from URL (e.g., ws://localhost:8001?key=mystream)
+    const params = new URLSearchParams(req.url.replace('/?', ''));
+    const streamKey = params.get('key') || 'stream';
+    console.log(`Streaming to key: ${streamKey}`);
+
+    // Ensure HLS directory exists for this stream
+    const hlsDir = path.join(config.http.mediaroot, 'live', streamKey);
+    if (!fs.existsSync(hlsDir)) {
+        fs.mkdirSync(hlsDir, { recursive: true });
+    }
 
     // Spawn FFmpeg process
     // Inputs: stdin (from WebSocket)
-    // Outputs: RTMP stream to local NodeMediaServer
+    // Outputs: 
+    // 1. RTMP stream to local NodeMediaServer (for FLV/RTMP playback)
+    // 2. HLS files to media directory (for HLS playback)
     const ffmpegProcess = child_process.spawn(ffmpeg, [
         '-i', '-',                   // Input from stdin
         '-c:v', 'libx264',           // Video codec
@@ -55,8 +68,18 @@ wss.on('connection', (ws) => {
         '-c:a', 'aac',               // Audio codec
         '-ar', '44100',              // Audio sample rate
         '-b:a', '128k',              // Audio bitrate
-        '-f', 'flv',                 // Output format
-        'rtmp://127.0.0.1/live/stream' // Target RTMP URL
+
+        // Output 1: RTMP (FLV)
+        '-f', 'flv',
+        `rtmp://127.0.0.1/live/${streamKey}`,
+
+        // Output 2: HLS
+        '-f', 'hls',
+        '-hls_time', '2',
+        '-hls_list_size', '3',
+        '-hls_flags', 'delete_segments',
+        '-hls_segment_filename', path.join(hlsDir, '%d.ts'),
+        path.join(hlsDir, 'index.m3u8')
     ]);
 
     ffmpegProcess.stderr.on('data', (data) => {
