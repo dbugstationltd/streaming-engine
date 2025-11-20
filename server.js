@@ -32,6 +32,9 @@ config.trans = {
     ]
 };
 
+console.log('Media Root:', config.http.mediaroot);
+console.log('FFmpeg Path:', config.trans.ffmpeg);
+
 const nms = new NodeMediaServer(config);
 nms.run();
 
