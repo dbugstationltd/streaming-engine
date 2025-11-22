@@ -49,9 +49,12 @@ wss.on('connection', (ws, req) => {
 
     // Ensure HLS directory exists for this stream
     const hlsDir = path.join(config.http.mediaroot, 'live', streamKey);
-    if (!fs.existsSync(hlsDir)) {
-        fs.mkdirSync(hlsDir, { recursive: true });
+
+    // CLEANUP: Remove existing directory to prevent cached segments from interfering
+    if (fs.existsSync(hlsDir)) {
+        fs.rmSync(hlsDir, { recursive: true, force: true });
     }
+    fs.mkdirSync(hlsDir, { recursive: true });
 
     // Spawn FFmpeg process
     // Inputs: stdin (from WebSocket)
@@ -59,6 +62,7 @@ wss.on('connection', (ws, req) => {
     // 1. RTMP stream to local NodeMediaServer (for FLV/RTMP playback)
     // 2. HLS files to media directory (for HLS playback)
     const ffmpegProcess = child_process.spawn(ffmpeg, [
+        '-f', 'webm',                // Input format (from MediaRecorder)
         '-i', '-',                   // Input from stdin
         '-c:v', 'libx264',           // Video codec
         '-preset', 'ultrafast',      // Low latency
@@ -120,7 +124,14 @@ app.use(cors());
 
 // Serve HLS files with correct headers
 app.use('/live', (req, res, next) => {
-    res.header('Cache-Control', 'no-cache');
+    const ext = path.extname(req.path);
+    if (ext === '.m3u8') {
+        res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.header('Pragma', 'no-cache');
+        res.header('Expires', '0');
+    } else {
+        res.header('Cache-Control', 'public, max-age=2'); // Cache segments briefly
+    }
     next();
 }, express.static(path.join(config.http.mediaroot, 'live')));
 
