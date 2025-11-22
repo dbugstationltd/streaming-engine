@@ -75,7 +75,7 @@ wss.on('connection', (ws, req) => {
         '-f', 'hls',
         '-hls_time', '1',            // 1 second segments for lower latency
         '-hls_list_size', '3',       // Keep only 3 segments in playlist
-        '-hls_flags', 'delete_segments+append_list', // Ensure old segments are deleted
+        '-hls_flags', 'delete_segments', // Ensure old segments are deleted
         '-hls_segment_filename', path.join(hlsDir, '%d.ts'),
         path.join(hlsDir, 'index.m3u8')
     ]);
