@@ -64,9 +64,15 @@ wss.on('connection', (ws, req) => {
     const ffmpegProcess = child_process.spawn(ffmpeg, [
         '-f', 'webm',                // Input format (from MediaRecorder)
         '-i', '-',                   // Input from stdin
+
+        // Video encoding optimizations
         '-c:v', 'libx264',           // Video codec
-        '-preset', 'ultrafast',      // Low latency
+        '-preset', 'veryfast',       // Better balance than ultrafast
         '-tune', 'zerolatency',      // Low latency
+        '-r', '30',                  // Force 30 fps
+        '-g', '60',                  // Force keyframe every 60 frames (2s at 30fps)
+        '-sc_threshold', '0',        // Disable scene change detection for consistent GOP
+
         '-c:a', 'aac',               // Audio codec
         '-ar', '44100',              // Audio sample rate
         '-b:a', '128k',              // Audio bitrate
@@ -77,8 +83,8 @@ wss.on('connection', (ws, req) => {
 
         // Output 2: HLS
         '-f', 'hls',
-        '-hls_time', '1',            // 1 second segments for lower latency
-        '-hls_list_size', '3',       // Keep only 3 segments in playlist
+        '-hls_time', '2',            // 2 second segments (more stable)
+        '-hls_list_size', '6',       // Keep 6 segments (12s buffer)
         '-hls_flags', 'delete_segments', // Ensure old segments are deleted
         '-hls_segment_filename', path.join(hlsDir, '%d.ts'),
         path.join(hlsDir, 'index.m3u8')
