@@ -217,20 +217,17 @@
     <script>
         const canvas = document.getElementById('broadcastCanvas');
         const ctx = canvas.getContext('2d');
-        const sources = []; // Array of { type: 'video', element: videoElement, x, y, width, height }
+        const sources = [];
         let isStreaming = false;
         let mediaRecorder;
         let ws;
 
-        // Draw Loop
         function draw() {
-            // Clear canvas
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw sources
             sources.forEach(source => {
-                if (source.element.readyState === 4) { // HAVE_ENOUGH_DATA
+                if (source.element.readyState === 4) {
                     ctx.drawImage(source.element, source.x, source.y, source.width, source.height);
                 }
             });
@@ -284,15 +281,15 @@
                 width: canvas.width,
                 height: canvas.height
             };
-            sources.unshift(source); // Add as background
+            sources.unshift(source);
             updateSourcesList();
-            document.getElementById('hlsUrlInput').value = ''; // Clear input
+            document.getElementById('hlsUrlInput').value = '';
         }
 
         function addVideoSource(stream, name) {
             const video = document.createElement('video');
             video.srcObject = stream;
-            video.muted = true; // Mute local playback to avoid feedback
+            video.muted = true;
             video.play();
 
             const isScreen = name === 'Screen';
@@ -311,7 +308,7 @@
                 width: width,
                 height: height
             };
-            // Put screen at bottom (background), camera on top
+
             if (isScreen) {
                 sources.unshift(source);
             } else {
@@ -348,9 +345,58 @@
         function toggleStreaming() {
             if (isStreaming) {
                 stopStreaming();
+            } else {
+                startStreaming();
+            }
+        }
+
+        function startStreaming() {
+            let serverIp = document.getElementById('serverIp').value.trim();
+            if (!serverIp) {
+                serverIp = 'stream.revmov.com';
+            }
+
+            const streamKey = document.getElementById('streamKey').value || 'stream';
+
+            const isDomain = serverIp.includes('revmov.com');
+            const isSecure = isDomain || window.location.protocol === 'https:';
+
+            const httpProtocol = isSecure ? 'https:' : 'http:';
+            const wsProtocol = isSecure ? 'wss:' : 'ws:';
+
+            let rtmpDisplay, hlsDisplay, flvDisplay, wsUrl;
+
+            if (isDomain) {
+                rtmpDisplay = `${wsProtocol}//${serverIp}/rtmp`;
+                hlsDisplay = `${httpProtocol}//${serverIp}/live/${streamKey}/index.m3u8`;
+                flvDisplay = `${httpProtocol}//${serverIp}/live/${streamKey}.flv`;
+                wsUrl = `${wsProtocol}//${serverIp}/rtmp/?key=${streamKey}`;
+            } else {
+                rtmpDisplay = `rtmp://${serverIp}/live/${streamKey}`;
+                hlsDisplay = `http://${serverIp}:8080/live/${streamKey}/index.m3u8`;
+                flvDisplay = `http://${serverIp}:8000/live/${streamKey}.flv`;
+                wsUrl = `ws://${serverIp}:8001?key=${streamKey}`;
+            }
+
+            document.getElementById('rtmpUrl').innerText = rtmpDisplay;
+            document.getElementById('hlsUrl').innerText = hlsDisplay;
+            document.getElementById('flvUrl').innerText = flvDisplay;
+
+            console.log(`Connecting to WebSocket: ${wsUrl}`);
+
+            try {
+                ws = new WebSocket(wsUrl);
+            } catch (e) {
+                alert(`Failed to create WebSocket: ${e.message}`);
+                return;
+            }
+
+            ws.onopen = () => {
+                console.log('Connected to server');
+                const stream = canvas.captureStream(30);
+
                 let audioTrack = null;
                 for (const source of sources) {
-                    // Check if source has srcObject (camera/screen) with audio tracks
                     if (source.element.srcObject && source.element.srcObject.getAudioTracks) {
                         const tracks = source.element.srcObject.getAudioTracks();
                         if (tracks.length > 0) {
@@ -360,12 +406,11 @@
                     }
                 }
 
-                // If no audio track, create dummy silence
                 if (!audioTrack) {
                     console.log('No audio source found, creating silent track');
-                    const ctx = new AudioContext();
-                    const oscillator = ctx.createOscillator();
-                    const dst = ctx.createMediaStreamDestination();
+                    const audioCtx = new AudioContext();
+                    const oscillator = audioCtx.createOscillator();
+                    const dst = audioCtx.createMediaStreamDestination();
                     oscillator.connect(dst);
                     oscillator.start();
                     audioTrack = dst.stream.getAudioTracks()[0];
@@ -377,7 +422,7 @@
 
                 mediaRecorder = new MediaRecorder(stream, {
                     mimeType: 'video/webm;codecs=h264',
-                    videoBitsPerSecond: 2500000 // 2.5 Mbps (Reduced for stability)
+                    videoBitsPerSecond: 2500000
                 });
 
                 mediaRecorder.ondataavailable = (event) => {
@@ -386,7 +431,7 @@
                     }
                 };
 
-                mediaRecorder.start(250); // Send chunk every 250ms (Reduced for smoother playback)
+                mediaRecorder.start(250);
 
                 isStreaming = true;
                 document.getElementById('streamBtn').innerText = 'Stop Streaming';
