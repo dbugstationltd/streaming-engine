@@ -66,7 +66,10 @@ wss.on('connection', (ws, req) => {
         '-i', '-',                   // Input from stdin
 
         // Video encoding optimizations
-        '-c:v', 'libx264',           // Video codec
+        '-c:v', 'libx264',           // Video codec (H.264 Standard)
+        '-profile:v', 'main',        // Main profile (Standard for HLS)
+        '-level', '3.1',             // Level 3.1 (Broad compatibility)
+        '-pix_fmt', 'yuv420p',       // Ensure standard color space
         '-preset', 'veryfast',       // Better balance than ultrafast
         '-tune', 'zerolatency',      // Low latency
         '-r', '30',                  // Force 30 fps
