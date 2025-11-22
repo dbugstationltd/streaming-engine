@@ -56,6 +56,9 @@ wss.on('connection', (ws, req) => {
     }
     fs.mkdirSync(hlsDir, { recursive: true });
 
+    // Generate unique start number based on timestamp to prevent segment caching collisions
+    const startNumber = Math.floor(Date.now() / 1000);
+
     // Spawn FFmpeg process
     // Inputs: stdin (from WebSocket)
     // Outputs: 
@@ -89,6 +92,7 @@ wss.on('connection', (ws, req) => {
         '-hls_time', '2',            // 2 second segments (more stable)
         '-hls_list_size', '6',       // Keep 6 segments (12s buffer)
         '-hls_flags', 'delete_segments', // Ensure old segments are deleted
+        '-start_number', startNumber.toString(), // Unique start number to prevent caching
         '-hls_segment_filename', path.join(hlsDir, '%d.ts'),
         path.join(hlsDir, 'index.m3u8')
     ]);
@@ -133,14 +137,11 @@ app.use(cors());
 
 // Serve HLS files with correct headers
 app.use('/live', (req, res, next) => {
-    const ext = path.extname(req.path);
-    if (ext === '.m3u8') {
-        res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.header('Pragma', 'no-cache');
-        res.header('Expires', '0');
-    } else {
-        res.header('Cache-Control', 'public, max-age=2'); // Cache segments briefly
-    }
+    // Aggressive no-cache for ALL HLS content (playlists and segments)
+    res.header('Cache-Control', 'no-cache, no-store, must-revalidate, proxy-revalidate');
+    res.header('Pragma', 'no-cache');
+    res.header('Expires', '0');
+    res.header('Surrogate-Control', 'no-store');
     next();
 }, express.static(path.join(config.http.mediaroot, 'live')));
 
