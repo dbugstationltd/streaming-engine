@@ -24,7 +24,7 @@ config.trans = {
         {
             app: 'live',
             hls: true,
-            hlsFlags: '[hls_time=2:hls_list_size=3:hls_flags=delete_segments]',
+            hlsFlags: '[hls_time=2:hls_list_size=10:hls_flags=delete_segments]',
             hlsKeep: true, // to prevent file deletion issues
             dash: true,
             dashFlags: '[f=dash:window_size=3:extra_window_size=5]'
@@ -76,7 +76,7 @@ wss.on('connection', (ws, req) => {
         // Output 2: HLS
         '-f', 'hls',
         '-hls_time', '2',
-        '-hls_list_size', '3',
+        '-hls_list_size', '10',
         '-hls_flags', 'delete_segments',
         '-hls_segment_filename', path.join(hlsDir, '%d.ts'),
         path.join(hlsDir, 'index.m3u8')
@@ -126,13 +126,13 @@ app.use('/live', (req, res, next) => {
     next();
 }, express.static(path.join(config.http.mediaroot, 'live')));
 
-// Serve Static Files (Broadcaster UI)
-app.use(express.static(path.join(__dirname, 'public')));
-
 // Fallback to broadcaster.html for root if needed (optional, but good for UX)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'broadcaster.html'));
 });
+
+// Serve Static Files (Broadcaster UI)
+app.use(express.static(path.join(__dirname, 'public')));
 
 const HLS_PORT = 8080;
 app.listen(HLS_PORT, () => {
